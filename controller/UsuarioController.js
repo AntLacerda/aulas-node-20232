@@ -1,5 +1,6 @@
 const Usuario = require('../model/Usuario');
 const client = require('../database/redis');
+const { json } = require('../database/sequelize');
 
 module.exports.listarUsuarios = async function (req, res) {
   const usuarios = await Usuario.findAll();
@@ -7,15 +8,22 @@ module.exports.listarUsuarios = async function (req, res) {
 };
 
 module.exports.buscarPorEmail = async function(req,res){
-  console.log(await client.ping());
-  const usuario = await Usuario.findByPk(req.params.email);
+  const {email} = req.params;
 
-  if(usuario){
-    res.status(200).send(usuario);
-  }else{
-    res.status(404).send('Usuário não encontrado');
+  const cache = await client.get(email);
+
+  if(cache){
+    return res.status(200).send(cache);
   }
 
+  const usuario = await Usuario.findByPk(req.params.email);
+
+  if(!usuario){
+    return res.status(404).send("Usuário não encontrado!");
+  }
+  
+  await client.set(email, JSON.stringify(usuario.dataValues));
+  res.status(200).send(usuario.dataValues);
 };
 
 module.exports.salvarUsuario = async function (req, res){
